@@ -1,0 +1,48 @@
+# Segredos locais (manter somente exemplos sem valores reais)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Angular e Node
+node_modules/
+.angular/
+dist/
+coverage/
+
+# Dados e artefatos privados
+[Dd]ados/
+[Bb]ackups/
+[Ll]ogs/
+[Uu]ploads/
+[Ee]xports/
+[Pp]acotes/
+*.log
+[Dd]umps/
+*.dump
+*.backup
+*.sqlite3
+*.xlsx
+*.xls
+*.csv
+*.zip
+*.7z
+
+# Sistema/editor
+Thumbs.db
+Desktop.ini
+.DS_Store
+.idea/
+*.swp
