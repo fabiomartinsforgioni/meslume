@@ -1,0 +1,13 @@
+MESLUME - BACKUP POSTGRESQL 17
+
+1. Guarde este ZIP em C:\Meslume\Pacotes\Zips\
+2. Extraia os arquivos PS1 em C:\Projetos\Meslume\Infra\Windows\
+3. Abra o PowerShell como administrador e execute:
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\Projetos\Meslume\Infra\Windows\01_Configurar-Backup-Meslume.ps1"
+
+4. O script pedira a senha do usuario PostgreSQL meslume_app, que deve
+ser digitada somente no seu PC.
+5. Os backups ficam em C:\Meslume\Backups\PostgreSQL\Diarios\
+6. O backup e agendado diariamente para 20h (horario do Windows).
+7. Teste de restauracao em banco isolado ainda deve ser feito.
