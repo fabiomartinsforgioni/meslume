@@ -1,0 +1,608 @@
+@if (sync.acesso() !== 'pronto') {
+  <main class="acesso-meslume">
+    <section class="acesso-cartao">
+      <img src="brand/meslume-logo.png" alt="Meslume" />
+      @if (sync.acesso() === 'login') {
+        <h1>Entrar no Meslume</h1>
+        <p>Acesse suas informações financeiras com sua conta local.</p>
+        <form (ngSubmit)="entrar()">
+          <label for="login-usuario">Usuário</label>
+          <input id="login-usuario" name="usuario" autocomplete="username" required [(ngModel)]="usuarioLogin" />
+          <label for="login-senha">Senha</label>
+          <input id="login-senha" name="senha" type="password" autocomplete="current-password" required [(ngModel)]="senhaLogin" />
+          <button type="submit" class="botao botao--primario">Entrar</button>
+        </form>
+      } @else {
+        <h1>{{ sync.acesso() === 'falha' ? 'Conexão indisponível' : 'Conectando ao Meslume…' }}</h1>
+        <p>{{ sync.acesso() === 'falha' ? 'O acesso financeiro ficará bloqueado até a conexão voltar.' : 'Carregando seus dados com segurança.' }}</p>
+        @if (sync.acesso() === 'falha') {
+          <button class="botao botao--primario" type="button" (click)="sync.tentarNovamente()">Tentar novamente</button>
+        }
+      }
+      @if (sync.mensagem()) { <p class="acesso-erro" role="alert">{{ sync.mensagem() }}</p> }
+    </section>
+  </main>
+} @else {
+<div class="meslume-shell" [class.tema-escuro]="store.tema() === 'escuro'">
+  <aside class="barra-lateral">
+    <div class="marca">
+      <img src="brand/meslume-logo.png" alt="Meslume" />
+    </div>
+    <div class="menu-rolagem">
+      @for (grupo of ['Principal', 'Organização', 'Cadastros', 'Análise', 'Sistema']; track grupo) {
+        <div class="menu-grupo">
+          <span class="menu-grupo__titulo">{{ grupo }}</span>
+          @for (item of paginas; track item.id) {
+            @if (item.grupo === grupo) {
+              <button class="menu-item" type="button" [class.ativo]="pagina() === item.id"
+                [attr.aria-current]="pagina() === item.id ? 'page' : null"
+                (click)="navegar(item.id)">
+                <span class="menu-item__icone" aria-hidden="true">{{ item.icone }}</span>
+                <span>{{ item.nome }}</span>
+              </button>
+            }
+          }
+        </div>
+      }
+    </div>
+    <div class="perfil-resumo">
+      <img src="brand/meslume-icon.png" alt="" />
+      <div><strong>{{ sync.usuario() }}</strong><small>Banco PostgreSQL</small></div>
+    </div>
+  </aside>
+
+  <div class="area-principal">
+    <header class="cabecalho">
+      <div>
+        <span class="sobretitulo">MESLUME / {{ tituloPagina() | uppercase }}</span>
+        <h1>{{ tituloPagina() }}</h1>
+        <p>Seu controle financeiro, do seu jeito.</p>
+      </div>
+      <div class="cabecalho__acoes">
+        <span class="status-gravacao" role="status" [class.status-erro]="sync.gravacao() === 'erro'">
+          @switch (sync.gravacao()) {
+            @case ('salvo') { ✓ Salvo no PostgreSQL }
+            @case ('pendente') { ◷ Alterações pendentes }
+            @case ('salvando') { ◷ Salvando… }
+            @case ('erro') { ⚠ Falha ao salvar }
+          }
+        </span>
+        @if (sync.gravacao() === 'erro') {
+          <button type="button" class="botao botao--secundario" (click)="sync.tentarNovamente()">Tentar salvar</button>
+        }
+        <button type="button" class="botao botao--secundario" (click)="sync.sair()">Sair</button>
+        <button class="botao botao--secundario" type="button" (click)="store.alternarTema()"
+          [attr.aria-label]="store.tema() === 'claro' ? 'Ativar modo escuro' : 'Ativar modo claro'">
+          {{ store.tema() === 'claro' ? '☾ Modo escuro' : '☀ Modo claro' }}
+        </button>
+        @if (pagina() !== 'painel' && pagina() !== 'relatorios' && pagina() !== 'configuracoes') {
+          <button class="botao botao--primario" type="button" (click)="adicionarPorPagina()">+ {{ tituloAcao() }}</button>
+        } @else {
+          <button class="botao botao--primario" type="button" (click)="abrirDespesa()">+ Novo gasto</button>
+        }
+      </div>
+    </header>
+
+    <main class="conteudo">
+      <div class="aviso-ambiente" role="note">
+        <strong>Armazenamento local protegido.</strong> O Meslume salva alterações no PostgreSQL.
+        Antes de fechar a página, confira a indicação <strong>Salvo no PostgreSQL</strong>.
+        Esta é a primeira integração: os cálculos ainda são executados no navegador.
+      </div>
+      @if (sync.mensagem()) {
+        <div class="aviso-info" role="alert">{{ sync.mensagem() }}</div>
+      }
+      @if (aviso()) {
+        <div class="aviso-info" role="status">{{ aviso() }}
+          <button type="button" (click)="aviso.set('')" aria-label="Dispensar aviso">×</button>
+        </div>
+      }
+      <div class="periodo-barra">
+        <div class="periodo-controle">
+          <button type="button" aria-label="Mês anterior" (click)="moverMes(-1)">‹</button>
+          <div><small>Mês de referência</small><strong>{{ nomeMes(store.mes()) | titlecase }}</strong></div>
+          <button type="button" aria-label="Mês seguinte" (click)="moverMes(1)">›</button>
+        </div>
+        <input type="month" aria-label="Selecionar mês" [ngModel]="store.mes()"
+          (ngModelChange)="store.mes.set($event)" />
+      </div>
+
+      @if (pagina() === 'painel') {
+        <section class="grade-kpis" aria-label="Resumo financeiro do mês">
+          <article class="kpi"><span>Entradas previstas</span><strong>{{ dinheiro(store.totalEntrada()) }}</strong><small>Principal + outras entradas</small></article>
+          <article class="kpi"><span>Gastos pessoais previstos</span><strong>{{ dinheiro(store.totalDespesas()) }}</strong><small>Inclui parcelas e faturas do período</small></article>
+          <article class="kpi kpi--destaque"><span>Sobrando no mês</span>
+            <strong [class.negativo]="store.saldoPrevisto() < 0">{{ dinheiro(store.saldoPrevisto()) }}</strong>
+            <small>Entradas previstas − gastos pessoais</small>
+          </article>
+          <article class="kpi"><span>Recebido − pago</span><strong>{{ dinheiro(store.saldoRealizado()) }}</strong>
+            <small>Visão realizada, não é saldo bancário</small></article>
+        </section>
+        <div class="grade-dois">
+          <section class="painel">
+            <div class="painel__topo"><div><h2>Distribuição por categoria</h2><p>Onde está indo seu dinheiro</p></div></div>
+            @if (store.resumoCategorias().length) {
+              <div class="rosca-layout">
+                <div class="rosca" [style.background]="graficoRosca()" role="img" aria-label="Distribuição de despesas por categoria">
+                  <div><small>Gastos</small><strong>{{ dinheiro(store.totalDespesas()) }}</strong></div>
+                </div>
+                <div class="legenda-rosca">
+                  @for (cat of store.resumoCategorias(); track cat.nome; let i = $index) {
+                    <div><i [style.background]="corGrafico(i)"></i><span>{{ cat.nome }}</span><strong>{{ dinheiro(cat.total) }}</strong></div>
+                  }
+                </div>
+              </div>
+            } @else { <div class="vazio">Cadastre gastos para visualizar este gráfico.</div> }
+          </section>
+          <section class="painel">
+            <div class="painel__topo"><div><h2>Gastos por cartão</h2><p>Valor das parcelas na fatura selecionada</p></div></div>
+            @if (store.estado().cartoes.length) {
+              <div class="lista-cartoes-resumo">
+                @for (cartao of store.estado().cartoes; track cartao.id) {
+                  <div class="cartao-resumo"><span><b>▣</b> {{ cartao.nome }}<small>Vence dia {{ cartao.vencimento }}</small></span>
+                    <strong>{{ dinheiro(store.totalCartao(cartao.id)) }}</strong></div>
+                }
+              </div>
+            } @else { <div class="vazio">Cadastre os cartões para acompanhar seus totais.</div> }
+            <button type="button" class="link-acao" (click)="navegar('cartoes')">Ver cartões e faturas →</button>
+          </section>
+        </div>
+        <section class="painel">
+          <div class="painel__topo"><div><h2>Entradas, gastos e sobra</h2><p>Comparativo dos últimos seis meses</p></div></div>
+          <div class="colunas-grafico" role="img" aria-label="Barras comparando entradas e despesas por mês">
+            @for (ponto of store.serieMeses(); track ponto.mes) {
+              <div class="coluna-grupo">
+                <div class="coluna-grupo__barras">
+                  <div class="coluna coluna--entrada" [style.height.%]="percentual(ponto.entradas, maiorValorSerie())"
+                    [title]="'Entradas: ' + dinheiro(ponto.entradas)"></div>
+                  <div class="coluna coluna--gasto" [style.height.%]="percentual(ponto.gastos, maiorValorSerie())"
+                    [title]="'Gastos: ' + dinheiro(ponto.gastos)"></div>
+                </div><small>{{ mesCurto(ponto.mes) }}</small><strong [class.negativo]="ponto.sobrando < 0">{{ dinheiro(ponto.sobrando) }}</strong>
+              </div>
+            }
+          </div>
+          <div class="legenda"><span><i class="ponto ponto--entrada"></i> Entradas previstas</span><span><i class="ponto ponto--gasto"></i> Gastos previstos</span></div>
+        </section>
+        <div class="grade-dois">
+          <section class="painel">
+            <div class="painel__topo"><div><h2>Gastos por meio de pagamento</h2><p>Cartões, Pix e outros</p></div></div>
+            @for (item of store.resumoPagamentos(); track item.nome) {
+              <div class="barra-item"><div><span>{{ item.nome }}</span><strong>{{ dinheiro(item.total) }}</strong></div>
+                <div class="barra-trilho"><div [style.width.%]="percentual(item.total, store.totalDespesas())"></div></div></div>
+            } @empty { <div class="vazio">Ainda não há gastos neste mês.</div> }
+          </section>
+          <section class="painel">
+            <div class="painel__topo"><div><h2>Agendas presenciais</h2><p>Resumo separado das finanças pessoais</p></div></div>
+            <div class="indicadores-simples">
+              <div><span>Previsto</span><strong>{{ dinheiro(agendaResumo().previsto) }}</strong></div>
+              <div><span>Realizado</span><strong>{{ dinheiro(agendaResumo().realizado) }}</strong></div>
+              <div><span>A receber</span><strong>{{ dinheiro(agendaResumo().aReceber) }}</strong></div>
+              <div><span>Sobrando após gastos</span><strong>{{ dinheiro(agendaResumo().sobrando) }}</strong></div>
+            </div>
+            <button type="button" class="link-acao" (click)="navegar('agendas')">Acessar agendas →</button>
+          </section>
+        </div>
+      }
+
+      @if (pagina() === 'lancamentos') {
+        <section class="grade-kpis grade-kpis--tres">
+          <article class="kpi"><span>Total de gastos no mês</span><strong>{{ dinheiro(store.totalDespesas()) }}</strong></article>
+          <article class="kpi"><span>Pagos/liquidados</span><strong>{{ dinheiro(store.totalPago()) }}</strong></article>
+          <article class="kpi"><span>Pendentes</span><strong>{{ dinheiro(store.totalDespesas() - store.totalPago()) }}</strong></article>
+        </section>
+        <section class="painel">
+          <div class="painel__topo painel__topo--quebra"><div><h2>Gastos do mês</h2><p>Valor por parcela, como na sua planilha</p></div>
+            <div class="filtros"><input type="search" placeholder="Buscar descrição" aria-label="Buscar descrição" [ngModel]="busca()" (ngModelChange)="busca.set($event)" />
+              <select aria-label="Categoria" [ngModel]="filtroCategoria()" (ngModelChange)="filtroCategoria.set($event)">
+                <option value="">Todas as categorias</option>
+                @for (c of categoriasDespesa(); track c.id) { <option [value]="c.id">{{ c.nome }}</option> }
+              </select></div></div>
+          <div class="tabela-rolagem"><table><thead><tr><th>Despesa</th><th>Compra</th><th>Meio / cartão</th><th>Parcela</th><th>Valor do mês</th><th>Status</th><th>Ações</th></tr></thead><tbody>
+            @for (item of despesasVisiveis(); track item.id) {
+              <tr><td><strong>{{ item.descricao }}</strong><small>{{ nomeCategoria(item.categoriaId) }}</small>
+                @if (item.etiquetas.length) { <div class="etiquetas-inline">@for (et of item.etiquetas; track et) { @if (store.obterEtiqueta(et); as etiqueta) { <span [style.borderColor]="etiqueta.cor">{{ etiqueta.nome }}</span> } }</div> }
+              </td><td>{{ formatoData(item.dataCompra) }}</td><td>{{ item.metodo === 'credito' ? nomeCartao(item.cartaoId) : store.rotuloMetodo(item.metodo) }}</td>
+                <td><span class="chip">{{ detalhesParcelamento(item) }}</span></td><td class="num"><strong>{{ dinheiro(item.valorCentavos) }}</strong></td>
+                <td><span class="estado" [class.estado--ok]="store.pago(item)">{{ store.pago(item) ? 'Pago' : 'Pendente' }}</span></td>
+                <td class="acoes-tabela"><button type="button" (click)="abrirDespesa(item.contexto, item)">Editar</button>
+                  @if (item.metodo !== 'credito') { <button type="button" (click)="store.alternarDespesa(item.id)">{{ item.paga ? 'Reabrir' : 'Pagar' }}</button> }
+                  <button type="button" class="perigo" (click)="excluirDespesa(item)">Excluir</button></td></tr>
+            } @empty { <tr><td colspan="7"><div class="vazio">Nenhum gasto cadastrado para este mês. Use “Novo gasto”.</div></td></tr> }
+          </tbody></table></div>
+        </section>
+      }
+
+      @if (pagina() === 'entradas') {
+        <section class="grade-kpis grade-kpis--tres">
+          <article class="kpi"><span>Entradas previstas</span><strong>{{ dinheiro(store.totalEntrada()) }}</strong></article>
+          <article class="kpi"><span>Entradas recebidas</span><strong>{{ dinheiro(store.totalEntrada(store.mes(), true)) }}</strong></article>
+          <article class="kpi"><span>Sobra projetada</span><strong>{{ dinheiro(store.saldoPrevisto()) }}</strong><small>Entradas − despesas pessoais</small></article>
+        </section>
+        <section class="painel"><div class="painel__topo"><div><h2>Entradas do mês</h2><p>Salário, valores extras e demais receitas</p></div></div>
+          <div class="tabela-rolagem"><table><thead><tr><th>Descrição</th><th>Data</th><th>Origem</th><th>Valor</th><th>Situação</th><th>Ações</th></tr></thead><tbody>
+            @for (item of entradasVisiveis(); track item.id) { <tr><td><strong>{{ item.descricao }}</strong></td><td>{{ formatoData(item.data) }}</td>
+              <td>{{ item.origem === 'principal' ? 'Entrada principal' : 'Outros' }}</td><td class="num">{{ dinheiro(item.valorCentavos) }}</td>
+              <td><span class="estado" [class.estado--ok]="item.recebida">{{ item.recebida ? 'Recebida' : 'Prevista' }}</span></td>
+              <td class="acoes-tabela"><button type="button" (click)="abrirEntrada(item)">Editar</button>
+                <button type="button" (click)="store.alternarEntrada(item.id)">{{ item.recebida ? 'Reabrir' : 'Receber' }}</button>
+                <button type="button" class="perigo" (click)="excluirEntrada(item)">Excluir</button></td></tr>
+            } @empty { <tr><td colspan="6"><div class="vazio">Cadastre sua entrada principal e as demais receitas.</div></td></tr> }
+          </tbody></table></div></section>
+      }
+
+      @if (pagina() === 'cartoes') {
+        <section class="cartoes-grade">
+          @for (cartao of store.estado().cartoes; track cartao.id) {
+            <article class="cartao-item" [class.cartao-item--selecionado]="cartaoAtual()?.id === cartao.id">
+              <div class="cartao-item__linha"><span>▣ CARTÃO DE CRÉDITO</span><button type="button" (click)="abrirCartao(cartao)">Editar</button></div>
+              <h2>{{ cartao.nome }}</h2><p>{{ cartao.titular || 'Titular não informado' }}</p>
+              <strong>{{ dinheiro(store.totalCartao(cartao.id)) }}</strong><small>Fatura de {{ nomeMes(store.mes()) }}</small>
+              <div class="cartao-item__datas"><span>Fecha dia {{ cartao.fechamento }}</span><span>Vence dia {{ cartao.vencimento }}</span></div>
+              <div class="cartao-item__acoes"><button type="button" (click)="cartaoSelecionado.set(cartao.id)">Ver parcelas</button>
+                <button type="button" class="perigo" (click)="excluirCartao(cartao)">Excluir</button></div>
+            </article>
+          } @empty { <div class="painel vazio">Nenhum cartão cadastrado. Cadastre seus cartões para vincular compras e parcelas.</div> }
+        </section>
+        @if (cartaoAtual(); as cartao) {
+          <section class="painel"><div class="painel__topo painel__topo--quebra">
+            <div><h2>Fatura: {{ cartao.nome }}</h2><p>Vencimento previsto: {{ formatoData(dataDoMes(store.mes(), cartao.vencimento)) }} · {{ contagemParcelas(cartao.id) }} parcela(s) de compras parceladas neste mês</p></div>
+            <div class="fatura-acao"><strong>{{ dinheiro(store.totalCartao(cartao.id)) }}</strong>
+              <button type="button" class="botao" [class.botao--primario]="!store.faturaPaga(cartao.id)"
+                [class.botao--secundario]="store.faturaPaga(cartao.id)" (click)="store.marcarFatura(cartao.id)">
+                {{ store.faturaPaga(cartao.id) ? '↶ Reabrir fatura' : '✓ Marcar fatura paga' }}</button></div>
+          </div><div class="tabela-rolagem"><table><thead><tr><th>Compra</th><th>Data compra</th><th>Parcela atual</th><th>Valor</th><th>Ações</th></tr></thead><tbody>
+            @for (p of parcelasCartao(cartao.id); track p.id) {
+              <tr><td>{{ p.descricao }}</td><td>{{ formatoData(p.dataCompra) }}</td><td>{{ detalhesParcelamento(p) }}</td>
+                <td class="num">{{ dinheiro(p.valorCentavos) }}</td><td class="acoes-tabela"><button type="button" (click)="abrirDespesa('pessoal', p)">Editar compra</button></td></tr>
+            } @empty { <tr><td colspan="5"><div class="vazio">Nenhuma compra neste cartão no mês selecionado.</div></td></tr> }
+          </tbody></table></div><p class="nota-fatura">Marcar uma fatura como paga liquida o conjunto desta fatura sem duplicar lançamentos. Não cria outro gasto.</p></section>
+        }
+      }
+
+      @if (pagina() === 'agendas') {
+        <section class="painel painel--destaque-agenda">
+          <div class="painel__topo painel__topo--quebra">
+            <div>
+              <h2>Presenças e recebimentos</h2>
+              <p>O mês selecionado é a competência do recebimento. Os dias presenciais podem ser do mês anterior, como na planilha.</p>
+            </div>
+            <div class="acoes-tabela">
+              <button type="button" class="botao botao--primario" (click)="abrirLote()">+ Marcar dias presenciais</button>
+              <button type="button" class="botao botao--secundario" (click)="abrirRecebimentoAgenda()">Registrar recebimento</button>
+            </div>
+          </div>
+        </section>
+        <section class="grade-kpis">
+          <article class="kpi"><span>Dias realizados</span><strong>{{ resumoDiasAgendas().realizadas }}</strong>
+            <small>{{ resumoDiasAgendas().previstas }} dia(s) apenas previsto(s)</small></article>
+          <article class="kpi"><span>Valor realizado</span><strong>{{ dinheiro(agendaResumo().realizado) }}</strong>
+            <small>Presenças efetivamente realizadas</small></article>
+          <article class="kpi"><span>Já recebido</span><strong>{{ dinheiro(agendaResumo().recebido) }}</strong>
+            <small>Recebimentos lançados manualmente</small></article>
+          <article class="kpi"><span>Falta receber</span><strong>{{ dinheiro(agendaResumo().aReceber) }}</strong>
+            <small>Realizado menos recebimentos</small></article>
+        </section>
+        <section class="grade-kpis grade-kpis--tres">
+          <article class="kpi"><span>Receita prevista</span><strong>{{ dinheiro(agendaResumo().previsto) }}</strong>
+            <small>Inclui dias previstos e realizados</small></article>
+          <article class="kpi"><span>Gastos desta competência</span><strong>{{ dinheiro(agendaResumo().gastos) }}</strong></article>
+          <article class="kpi"><span>Sobrando após gastos</span><strong [class.negativo]="agendaResumo().sobrando < 0">{{ dinheiro(agendaResumo().sobrando) }}</strong>
+            <small>Receita prevista − gastos, não é caixa recebido</small></article>
+        </section>
+        <div class="grade-dois">
+          <section class="painel">
+            <div class="painel__topo"><div><h2>Clientes e diária</h2><p>O valor padrão pode ser alterado por dia.</p></div>
+              <button type="button" class="botao botao--secundario" (click)="abrirCliente()">+ Cliente</button></div>
+            @for (cliente of store.estado().clientes; track cliente.id) {
+              <div class="linha-simples"><div><strong>{{ cliente.nome }}</strong><small>{{ dinheiro(cliente.diariaCentavos) }} por presença</small></div>
+                <div class="acoes-tabela"><button type="button" (click)="abrirCliente(cliente)">Editar</button>
+                  <button type="button" class="perigo" (click)="excluirCliente(cliente)">Excluir</button></div></div>
+            } @empty { <div class="vazio">Cadastre um cliente e a diária para registrar presenças.</div> }
+          </section>
+          <section class="painel">
+            <div class="painel__topo"><div><h2>Recebimentos desta competência</h2>
+              <p>Data e valor efetivamente recebidos, independentemente da data da presença.</p></div>
+              <button type="button" class="botao botao--secundario" (click)="abrirRecebimentoAgenda()">+ Recebimento</button></div>
+            @for (item of recebimentosVisiveis(); track item.id) {
+              <div class="linha-simples"><div><strong>{{ store.obterCliente(item.clienteId) }} · {{ dinheiro(item.valorCentavos) }}</strong>
+                  <small>Recebido em {{ formatoData(item.data) }}{{ item.observacao ? ' · ' + item.observacao : '' }}</small></div>
+                <div class="acoes-tabela"><button type="button" (click)="abrirRecebimentoAgenda(item)">Editar</button>
+                  <button type="button" class="perigo" (click)="excluirRecebimentoAgenda(item)">Excluir</button></div></div>
+            } @empty { <div class="vazio">Nenhum recebimento registrado. Os dias presenciais não são considerados recebidos automaticamente.</div> }
+          </section>
+        </div>
+        <section class="painel">
+          <div class="painel__topo painel__topo--quebra"><div><h2>Dias presenciais da competência</h2>
+            <p>Confira as datas trabalhadas, o valor de cada dia e a previsão do pagamento.</p></div>
+            <button type="button" class="botao botao--secundario" (click)="abrirLote()">Selecionar vários dias</button></div>
+          <div class="tabela-rolagem"><table>
+            <thead><tr><th>Cliente</th><th>Dia presencial</th><th>Diária</th><th>Situação</th><th>Pagamento previsto</th><th>Ações</th></tr></thead>
+            <tbody>
+              @for (item of agendasVisiveis(); track item.id) {
+                <tr><td>{{ store.obterCliente(item.clienteId) }}</td><td>{{ formatoData(item.data) }}</td>
+                  <td class="num">{{ dinheiro(item.valorCentavos) }}</td>
+                  <td>{{ item.status | titlecase }}</td>
+                  <td>{{ item.previsaoPagamento ? formatoData(item.previsaoPagamento) : 'Não definido' }}</td>
+                  <td class="acoes-tabela"><button type="button" (click)="abrirAgenda(item)">Editar</button>
+                    <button type="button" class="perigo" (click)="excluirAgenda(item)">Excluir</button></td></tr>
+              } @empty { <tr><td colspan="6"><div class="vazio">Ainda não há dias presenciais nesta competência.</div></td></tr> }
+            </tbody>
+          </table></div>
+        </section>
+        <section class="painel"><div class="painel__topo"><div><h2>Gastos vinculados às agendas</h2>
+          <p>Parcelas e despesas separadas do financeiro pessoal, abatidas da receita prevista.</p></div>
+          <button type="button" class="botao botao--secundario" (click)="abrirDespesa('agendas')">+ Gasto</button></div>
+          <div class="tabela-rolagem"><table><thead><tr><th>Descrição</th><th>Data</th><th>Parcela</th><th>Valor</th><th>Ações</th></tr></thead><tbody>
+            @for (item of despesasVisiveis('agendas'); track item.id) {
+              <tr><td>{{ item.descricao }}</td><td>{{ formatoData(item.dataCompra) }}</td>
+                <td>{{ detalhesParcelamento(item) }}</td><td class="num">{{ dinheiro(item.valorCentavos) }}</td>
+                <td class="acoes-tabela"><button type="button" (click)="abrirDespesa('agendas', item)">Editar</button>
+                  <button type="button" class="perigo" (click)="excluirDespesa(item)">Excluir</button></td></tr>
+            } @empty { <tr><td colspan="5"><div class="vazio">Sem gastos de agenda nesta competência.</div></td></tr> }
+          </tbody></table></div>
+        </section>
+      }
+
+      @if (pagina() === 'recorrencias') {
+        <section class="painel"><div class="painel__topo painel__topo--quebra"><div><h2>Regras recorrentes</h2><p>Assinaturas e gastos repetidos. A geração é sempre manual.</p></div>
+          <button type="button" class="botao botao--secundario" (click)="gerarRecorrencias()">Gerar previstos deste mês</button></div>
+          <div class="tabela-rolagem"><table><thead><tr><th>Descrição</th><th>Valor</th><th>Dia</th><th>Meio</th><th>Situação</th><th>Ações</th></tr></thead><tbody>
+            @for (item of store.estado().recorrencias; track item.id) { <tr><td>{{ item.descricao }}</td><td class="num">{{ dinheiro(item.valorCentavos) }}</td><td>{{ item.dia }}</td>
+              <td>{{ item.metodo === 'credito' ? nomeCartao(item.cartaoId) : store.rotuloMetodo(item.metodo) }}</td><td>{{ item.ativa ? 'Ativa' : 'Pausada' }}</td>
+              <td class="acoes-tabela"><button type="button" (click)="abrirRecorrencia(item)">Editar</button><button type="button" class="perigo" (click)="excluirRecorrencia(item)">Excluir</button></td></tr>
+            } @empty { <tr><td colspan="6"><div class="vazio">Nenhuma recorrência. Cadastre uma regra e gere os previstos quando desejar.</div></td></tr> }
+          </tbody></table></div></section>
+      }
+
+      @if (pagina() === 'categorias') {
+        <section class="painel"><div class="painel__topo"><div><h2>Organizar categorias</h2><p>Classifique seus gastos e visualize gráficos</p></div></div>
+          <div class="grade-cadastros">@for (item of store.estado().categorias; track item.id) {
+            <div class="cadastro-card"><div><strong>{{ item.nome }}</strong><small>{{ item.tipo === 'despesa' ? 'Despesa' : 'Receita' }}</small></div>
+              <div class="acoes-tabela"><button type="button" (click)="abrirCategoria(item)">Editar</button><button type="button" class="perigo" (click)="excluirCategoria(item)">Excluir</button></div></div>
+          }</div></section>
+      }
+
+      @if (pagina() === 'etiquetas') {
+        <section class="painel"><div class="painel__topo"><div><h2>Suas etiquetas</h2><p>Use várias etiquetas no mesmo gasto</p></div></div>
+          <div class="grade-cadastros">@for (item of store.estado().etiquetas; track item.id) {
+            <div class="cadastro-card"><div class="etiqueta-titulo"><i [style.background]="item.cor"></i><strong>{{ item.nome }}</strong></div>
+              <div class="acoes-tabela"><button type="button" (click)="abrirEtiqueta(item)">Editar</button><button type="button" class="perigo" (click)="excluirEtiqueta(item)">Excluir</button></div></div>
+          } @empty { <div class="vazio">Você ainda não cadastrou etiquetas.</div> }</div></section>
+      }
+
+      @if (pagina() === 'relatorios') {
+        <section class="grade-kpis grade-kpis--tres">
+          <article class="kpi"><span>Gastos pessoais</span><strong>{{ dinheiro(store.totalDespesas()) }}</strong></article>
+          <article class="kpi"><span>Gastos de agendas</span><strong>{{ dinheiro(store.totalDespesas(store.mes(), 'agendas')) }}</strong></article>
+          <article class="kpi"><span>Total consolidado (gastos)</span><strong>{{ dinheiro(totalDespesasTodas()) }}</strong></article>
+        </section>
+        <div class="grade-dois"><section class="painel"><div class="painel__topo"><div><h2>Ranking de categorias</h2><p>Despesas pessoais do mês</p></div></div>
+          @for (item of store.resumoCategorias(); track item.nome; let i = $index) {
+            <div class="barra-item"><div><span>{{ i + 1 }}. {{ item.nome }}</span><strong>{{ dinheiro(item.total) }}</strong></div>
+              <div class="barra-trilho"><div [style.width.%]="percentual(item.total, store.totalDespesas())"></div></div></div>
+          } @empty { <div class="vazio">Sem lançamentos para analisar.</div> }
+        </section><section class="painel"><div class="painel__topo"><div><h2>Distribuição por meio</h2><p>Gastos por cartão ou forma de pagamento</p></div></div>
+          @for (item of store.resumoPagamentos(); track item.nome) {
+            <div class="barra-item"><div><span>{{ item.nome }}</span><strong>{{ dinheiro(item.total) }}</strong></div>
+              <div class="barra-trilho"><div [style.width.%]="percentual(item.total, store.totalDespesas())"></div></div></div>
+          } @empty { <div class="vazio">Sem dados para mostrar.</div> }
+        </section></div>
+        <section class="painel"><div class="painel__topo"><div><h2>Projeção dos próximos meses</h2><p>Com base nos valores já cadastrados, sem inventar entradas futuras</p></div></div>
+          <div class="tabela-rolagem"><table><thead><tr><th>Mês</th><th>Entradas cadastradas</th><th>Despesas cadastradas</th><th>Sobrando</th></tr></thead><tbody>
+            @for (periodo of store.serieMeses(deslocarMes(store.mes(), 5)); track periodo.mes) {
+              <tr><td>{{ nomeMes(periodo.mes) | titlecase }}</td><td class="num">{{ dinheiro(periodo.entradas) }}</td><td class="num">{{ dinheiro(periodo.gastos) }}</td>
+                <td class="num" [class.negativo]="periodo.sobrando < 0">{{ dinheiro(periodo.sobrando) }}</td></tr>
+            }
+          </tbody></table></div></section>
+      }
+
+      @if (pagina() === 'configuracoes') {
+        <div class="grade-dois">
+          <section class="painel configuracoes"><h2>Preferências de exibição</h2><p>O tema é a única configuração gravada no navegador nesta versão.</p>
+            <div class="linha-simples"><div><strong>Tema atual</strong><small>{{ store.tema() === 'claro' ? 'Claro' : 'Escuro' }}</small></div>
+              <button type="button" class="botao botao--secundario" (click)="store.alternarTema()">Alternar tema</button></div>
+            <div class="linha-simples"><div><strong>Mês de referência</strong><small>Afeta todas as abas</small></div>
+              <input type="month" [ngModel]="store.mes()" (ngModelChange)="store.mes.set($event)" aria-label="Mês de referência" /></div>
+          </section>
+          <section class="painel configuracoes"><h2>Armazenamento financeiro</h2>
+            <p>Registros deste usuário gravados no PostgreSQL. Não são salvos no localStorage.</p>
+            <div class="linha-simples"><div><strong>Sincronização</strong><small>{{ sync.gravacao() === 'salvo' ? 'Tudo salvo' : 'Existe alteração pendente' }}</small></div>
+              @if (sync.gravacao() === 'erro') { <button type="button" class="botao botao--primario" (click)="sync.tentarNovamente()">Repetir gravação</button> }
+            </div>
+            <p class="alerta">Os exemplos e o botão de limpar foram ocultados para evitar substituir acidentalmente dados reais.</p>
+          </section>
+        </div>
+      }
+    </main>
+  </div>
+
+  @if (modal()) {
+    <div class="fundo-modal" (click)="fecharModal()">
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="tituloModal" (click)="$event.stopPropagation()">
+        <div class="modal__cabecalho"><div><span class="sobretitulo">MESLUME / CADASTRO</span><h2 id="tituloModal">
+          @switch (modal()) {
+            @case ('despesa') { {{ formDespesa.id ? 'Editar gasto' : 'Novo gasto' }} }
+            @case ('entrada') { {{ formEntrada.id ? 'Editar entrada' : 'Nova entrada' }} }
+            @case ('cartao') { {{ formCartao.id ? 'Editar cartão' : 'Novo cartão' }} }
+            @case ('agenda') { {{ formAgenda.id ? 'Editar dia presencial' : 'Novo dia presencial' }} }
+            @case ('agendas-lote') { Marcar dias presenciais }
+            @case ('recebimento-agenda') { {{ formRecebimento.id ? 'Editar recebimento' : 'Registrar recebimento' }} }
+            @case ('cliente') { {{ formCliente.id ? 'Editar cliente' : 'Novo cliente' }} }
+            @case ('categoria') { {{ formCategoria.id ? 'Editar categoria' : 'Nova categoria' }} }
+            @case ('etiqueta') { {{ formEtiqueta.id ? 'Editar etiqueta' : 'Nova etiqueta' }} }
+            @case ('recorrencia') { {{ formRecorrencia.id ? 'Editar recorrência' : 'Nova recorrência' }} }
+          }
+        </h2></div><button type="button" class="modal__fechar" (click)="fecharModal()" aria-label="Fechar">×</button></div>
+        <form (ngSubmit)="salvarModal()" class="form-modal">
+          @if (modal() === 'despesa') {
+            <div class="campo"><label for="d-desc">Descrição *</label><input id="d-desc" name="d-desc" type="text" maxlength="120" required
+              placeholder="Ex.: compra no supermercado" [(ngModel)]="formDespesa.descricao" /></div>
+            <div class="form-grade">
+              <div class="campo"><label for="d-valor">Valor informado (R$) *</label><input id="d-valor" name="d-valor" type="text" inputmode="decimal" placeholder="Ex.: 89,90" required [(ngModel)]="formDespesa.valor" /></div>
+              <div class="campo"><label for="d-tipo-valor">Esse valor representa</label><select id="d-tipo-valor" name="d-tipo-valor" [(ngModel)]="formDespesa.tipoValor">
+                <option value="parcela">Valor de cada parcela (igual à planilha)</option><option value="total">Total a dividir pelas parcelas restantes</option></select></div>
+            </div>
+            <p class="texto-ajuda">Ex.: R$ 120,00, parcela 3 de 10: selecione “Valor de cada parcela” para registrar R$ 120,00 do mês da 3ª até a 10ª.</p>
+            <div class="form-grade form-grade--tres">
+              <div class="campo"><label for="d-parcelas">Total de parcelas *</label><input id="d-parcelas" name="d-parcelas" type="number" min="1" max="60" required
+                [(ngModel)]="formDespesa.parcelas" (ngModelChange)="atualizarNumeroParcelas()" /></div>
+              <div class="campo"><label for="d-primeira">Parcela que vou registrar</label><input id="d-primeira" name="d-primeira" type="number" min="1" [max]="formDespesa.parcelas"
+                [(ngModel)]="formDespesa.primeiraParcela" /></div>
+              <div class="campo"><label for="d-mes">Mês desta parcela *</label><input id="d-mes" name="d-mes" type="month" required [(ngModel)]="formDespesa.mesPrimeira" /></div>
+            </div>
+            <div class="form-grade">
+              <div class="campo"><label for="d-data">Data da compra *</label><input id="d-data" name="d-data" type="date" required [(ngModel)]="formDespesa.dataCompra" (ngModelChange)="sugerirMesParcela()" /></div>
+              <div class="campo"><label for="d-cat">Categoria *</label><select id="d-cat" name="d-cat" [(ngModel)]="formDespesa.categoriaId">
+                @for (cat of categoriasDespesa(); track cat.id) { <option [value]="cat.id">{{ cat.nome }}</option> }
+              </select></div>
+            </div>
+            <div class="form-grade">
+              <div class="campo"><label for="d-met">Forma de pagamento *</label><select id="d-met" name="d-met" [(ngModel)]="formDespesa.metodo" (ngModelChange)="sugerirMesParcela()">
+                <option value="pix">Pix / Outros</option><option value="debito">Débito</option><option value="dinheiro">Dinheiro</option>
+                <option value="boleto">Boleto</option><option value="credito">Cartão de crédito</option>
+              </select></div>
+              <div class="campo"><label for="d-contexto">Contexto</label><select id="d-contexto" name="d-contexto" [(ngModel)]="formDespesa.contexto">
+                <option value="pessoal">Financeiro pessoal</option><option value="agendas">Gastos de agendas</option>
+              </select></div>
+            </div>
+            @if (formDespesa.metodo === 'credito') {
+              <div class="campo"><label for="d-cartao">Cartão vinculado *</label><select id="d-cartao" name="d-cartao" required [(ngModel)]="formDespesa.cartaoId" (ngModelChange)="sugerirMesParcela()">
+                <option value="">Selecione um cartão cadastrado</option>
+                @for (cartao of store.estado().cartoes; track cartao.id) { <option [value]="cartao.id">{{ cartao.nome }} · fecha {{ cartao.fechamento }} · vence {{ cartao.vencimento }}</option> }
+              </select></div>
+              @if (!store.estado().cartoes.length) { <p class="alerta">Cadastre um cartão na aba Cartões antes de lançar uma compra no crédito.</p> }
+              <p class="texto-ajuda">O mês sugerido usa o fechamento e o vencimento do cartão. Você pode ajustá-lo manualmente.</p>
+            } @else {
+              <div class="campo"><label for="d-pago">Situação da primeira parcela cadastrada</label><select id="d-pago" name="d-pago" [(ngModel)]="formDespesa.paga">
+                <option [ngValue]="false">Pendente</option><option [ngValue]="true">Paga</option></select></div>
+            }
+            <div class="campo"><label>Etiquetas (opcional)</label><div class="etiquetas-escolha">
+              @for (et of store.estado().etiquetas; track et.id) { <button type="button" [class.selecionada]="etiquetaMarcada(et.id)"
+                (click)="alternarEtiqueta(et.id)"><i [style.background]="et.cor"></i>{{ et.nome }}</button> }
+              @empty { <small>Nenhuma etiqueta cadastrada. Você pode criá-las na aba Etiquetas.</small> }
+            </div></div>
+            @if (formDespesa.id) { <p class="alerta">Editar esta compra recria somente as parcelas cadastradas deste grupo. Se existir fatura marcada como paga, ela será reaberta para conferência.</p> }
+          }
+          @if (modal() === 'entrada') {
+            <div class="campo"><label for="e-desc">Descrição *</label><input id="e-desc" name="e-desc" required maxlength="120" [(ngModel)]="formEntrada.descricao" /></div>
+            <div class="form-grade"><div class="campo"><label for="e-valor">Valor *</label><input id="e-valor" name="e-valor" required inputmode="decimal" placeholder="Ex.: 1700,00" [(ngModel)]="formEntrada.valor" /></div>
+              <div class="campo"><label for="e-data">Data *</label><input id="e-data" name="e-data" type="date" required [(ngModel)]="formEntrada.data" /></div></div>
+            <div class="form-grade"><div class="campo"><label for="e-origem">Origem</label><select id="e-origem" name="e-origem" [(ngModel)]="formEntrada.origem"><option value="principal">Entrada principal</option><option value="outros">Outros</option></select></div>
+              <div class="campo"><label for="e-status">Situação</label><select id="e-status" name="e-status" [(ngModel)]="formEntrada.recebida"><option [ngValue]="false">Prevista</option><option [ngValue]="true">Recebida</option></select></div></div>
+          }
+          @if (modal() === 'cartao') {
+            <div class="campo"><label for="c-nome">Nome do cartão *</label><input id="c-nome" name="c-nome" required maxlength="80" placeholder="Ex.: Nubank" [(ngModel)]="formCartao.nome" /></div>
+            <div class="campo"><label for="c-tit">Titular (apenas informativo)</label><input id="c-tit" name="c-tit" maxlength="100" [(ngModel)]="formCartao.titular" /></div>
+            <div class="form-grade"><div class="campo"><label for="c-fech">Dia do fechamento *</label><input id="c-fech" name="c-fech" type="number" min="1" max="31" required [(ngModel)]="formCartao.fechamento" /></div>
+              <div class="campo"><label for="c-venc">Dia do vencimento *</label><input id="c-venc" name="c-venc" type="number" min="1" max="31" required [(ngModel)]="formCartao.vencimento" /></div></div>
+            <div class="campo"><label for="c-lim">Limite opcional (R$)</label><input id="c-lim" name="c-lim" inputmode="decimal" placeholder="Ex.: 3000,00" [(ngModel)]="formCartao.limite" /></div>
+          }
+          @if (modal() === 'cliente') {
+            <div class="campo"><label for="cl-nome">Cliente *</label><input id="cl-nome" name="cl-nome" required [(ngModel)]="formCliente.nome" /></div>
+            <div class="campo"><label for="cl-dia">Valor padrão da agenda (R$) *</label><input id="cl-dia" name="cl-dia" required inputmode="decimal" [(ngModel)]="formCliente.diaria" /></div>
+          }
+          @if (modal() === 'agendas-lote') {
+            <p class="texto-ajuda">Selecione vários dias de uma vez. Cada dia acrescenta o valor da diária ao total desta competência. O recebimento é registrado separadamente.</p>
+            <div class="form-grade">
+              <div class="campo"><label for="l-cliente">Cliente *</label>
+                <select id="l-cliente" name="l-cliente" required [ngModel]="formLote.clienteId" (ngModelChange)="clienteLoteAlterado($event)">
+                  <option value="">Selecione o cliente</option>
+                  @for (cliente of store.estado().clientes; track cliente.id) { <option [value]="cliente.id">{{ cliente.nome }}</option> }
+                </select></div>
+              <div class="campo"><label for="l-competencia">Mês do recebimento (competência) *</label>
+                <input id="l-competencia" name="l-competencia" type="month" required
+                  [ngModel]="formLote.competencia" (ngModelChange)="alterarCompetenciaLote($event)" /></div>
+            </div>
+            <div class="form-grade">
+              <div class="campo"><label for="l-diaria">Valor por dia (R$) *</label>
+                <input id="l-diaria" name="l-diaria" required inputmode="decimal" [(ngModel)]="formLote.valor" /></div>
+              <div class="campo"><label for="l-prev">Pagamento previsto (opcional)</label>
+                <input id="l-prev" name="l-prev" type="date" [(ngModel)]="formLote.previsaoPagamento" /></div>
+            </div>
+            <div class="campo"><label for="l-status">Situação dos dias</label><select id="l-status" name="l-status" [(ngModel)]="formLote.status">
+              <option value="realizada">Fui presencial (realizada)</option>
+              <option value="prevista">Prevista (ainda não fui)</option>
+            </select></div>
+            <div class="campo"><label for="l-mespresenca">Mês em que fui presencial</label>
+              <input id="l-mespresenca" name="l-mespresenca" type="month" [ngModel]="mesPresenca" (ngModelChange)="alterarMesPresenca($event)" /></div>
+            <div class="calendario-agendas" role="group" aria-label="Selecionar dias presenciais">
+              @for (semana of ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']; track semana) {
+                <span class="calendario-agendas__dia-semana">{{ semana }}</span>
+              }
+              @for (dia of diasPresenca(); track $index) {
+                @if (dia) {
+                  <button type="button" class="calendario-agendas__dia"
+                    [class.calendario-agendas__dia--marcado]="diaSelecionado(dia.data)"
+                    [attr.aria-pressed]="diaSelecionado(dia.data)"
+                    [attr.aria-label]="'Dia ' + formatoData(dia.data)"
+                    (click)="alternarDia(dia.data)">{{ dia.dia }}</button>
+                } @else {
+                  <span></span>
+                }
+              }
+            </div>
+            <p class="resumo-lote"><strong>{{ formLote.datas.length }} dia(s) selecionado(s)</strong>
+              <span>Total: {{ dinheiro(totalLote()) }}</span></p>
+          }
+          @if (modal() === 'agenda') {
+            <div class="campo"><label for="a-cliente">Cliente *</label><select id="a-cliente" name="a-cliente" required [(ngModel)]="formAgenda.clienteId" (ngModelChange)="clienteAlterado($event)">
+              <option value="">Selecione um cliente</option>@for (cliente of store.estado().clientes; track cliente.id) { <option [value]="cliente.id">{{ cliente.nome }}</option> }</select></div>
+            <div class="form-grade"><div class="campo"><label for="a-data">Dia presencial *</label><input id="a-data" name="a-data" type="date" required [(ngModel)]="formAgenda.data" /></div>
+              <div class="campo"><label for="a-comp">Mês de recebimento *</label><input id="a-comp" name="a-comp" type="month" required [(ngModel)]="formAgenda.competencia" /></div></div>
+            <div class="form-grade"><div class="campo"><label for="a-valor">Diária (R$) *</label><input id="a-valor" name="a-valor" required inputmode="decimal" [(ngModel)]="formAgenda.valor" /></div>
+              <div class="campo"><label for="a-prev">Pagamento previsto</label>
+                <input id="a-prev" name="a-prev" type="date" [(ngModel)]="formAgenda.previsaoPagamento" /></div></div>
+            <div class="campo"><label for="a-status">Situação da presença</label><select id="a-status" name="a-status" [(ngModel)]="formAgenda.status">
+              <option value="prevista">Prevista</option><option value="realizada">Realizada</option><option value="cancelada">Cancelada</option>
+            </select></div>
+          }
+          @if (modal() === 'recebimento-agenda') {
+            <p class="texto-ajuda">Registre o depósito do mês, total ou parcial. O pagamento pode acontecer em outro mês; a competência continua vinculada aos dias presenciais.</p>
+            <div class="form-grade">
+              <div class="campo"><label for="ra-cliente">Cliente *</label><select id="ra-cliente" name="ra-cliente" required
+                [ngModel]="formRecebimento.clienteId" (ngModelChange)="clienteRecebimentoAlterado($event)">
+                <option value="">Selecione</option>@for (cliente of store.estado().clientes; track cliente.id) { <option [value]="cliente.id">{{ cliente.nome }}</option> }</select></div>
+              <div class="campo"><label for="ra-comp">Competência das presenças *</label>
+                <input id="ra-comp" name="ra-comp" type="month" required [ngModel]="formRecebimento.competencia"
+                  (ngModelChange)="competenciaRecebimentoAlterada($event)" /></div>
+            </div>
+            <div class="form-grade">
+              <div class="campo"><label for="ra-data">Quando recebeu? *</label>
+                <input id="ra-data" name="ra-data" type="date" required [(ngModel)]="formRecebimento.data" /></div>
+              <div class="campo"><label for="ra-valor">Quanto recebeu? (R$) *</label>
+                <input id="ra-valor" name="ra-valor" required inputmode="decimal" [(ngModel)]="formRecebimento.valor" /></div>
+            </div>
+            <div class="campo"><label for="ra-obs">Observação</label>
+              <input id="ra-obs" name="ra-obs" maxlength="200" placeholder="Ex.: pagamento parcial" [(ngModel)]="formRecebimento.observacao" /></div>
+          }
+          @if (modal() === 'categoria') {
+            <div class="campo"><label for="cat-nome">Categoria *</label><input id="cat-nome" name="cat-nome" required [(ngModel)]="formCategoria.nome" /></div>
+            <div class="campo"><label for="cat-tipo">Tipo</label><select id="cat-tipo" name="cat-tipo" [(ngModel)]="formCategoria.tipo"><option value="despesa">Despesa</option><option value="receita">Receita</option></select></div>
+          }
+          @if (modal() === 'etiqueta') {
+            <div class="campo"><label for="et-nome">Nome da etiqueta *</label><input id="et-nome" name="et-nome" required [(ngModel)]="formEtiqueta.nome" /></div>
+            <div class="campo"><label for="et-cor">Cor</label><input id="et-cor" name="et-cor" type="color" [(ngModel)]="formEtiqueta.cor" /></div>
+          }
+          @if (modal() === 'recorrencia') {
+            <div class="campo"><label for="r-desc">Descrição *</label><input id="r-desc" name="r-desc" required [(ngModel)]="formRecorrencia.descricao" /></div>
+            <div class="form-grade"><div class="campo"><label for="r-valor">Valor mensal (R$)</label><input id="r-valor" name="r-valor" required inputmode="decimal" [(ngModel)]="formRecorrencia.valor" /></div>
+              <div class="campo"><label for="r-dia">Dia da cobrança</label><input id="r-dia" name="r-dia" type="number" min="1" max="31" [(ngModel)]="formRecorrencia.dia" /></div></div>
+            <div class="form-grade"><div class="campo"><label for="r-cat">Categoria</label><select id="r-cat" name="r-cat" [(ngModel)]="formRecorrencia.categoriaId">
+              @for (cat of categoriasDespesa(); track cat.id) { <option [value]="cat.id">{{ cat.nome }}</option> }</select></div>
+              <div class="campo"><label for="r-contexto">Contexto</label><select id="r-contexto" name="r-contexto" [(ngModel)]="formRecorrencia.contexto"><option value="pessoal">Pessoal</option><option value="agendas">Agendas</option></select></div></div>
+            <div class="form-grade"><div class="campo"><label for="r-metodo">Meio de pagamento</label><select id="r-metodo" name="r-metodo" [(ngModel)]="formRecorrencia.metodo"><option value="pix">Pix</option><option value="debito">Débito</option><option value="dinheiro">Dinheiro</option><option value="boleto">Boleto</option><option value="credito">Crédito</option></select></div>
+              <div class="campo"><label for="r-ativo">Situação</label><select id="r-ativo" name="r-ativo" [(ngModel)]="formRecorrencia.ativa"><option [ngValue]="true">Ativa</option><option [ngValue]="false">Pausada</option></select></div></div>
+            @if (formRecorrencia.metodo === 'credito') { <div class="campo"><label for="r-cartao">Cartão</label><select id="r-cartao" name="r-cartao" [(ngModel)]="formRecorrencia.cartaoId"><option value="">Selecione</option>
+              @for (c of store.estado().cartoes; track c.id) { <option [value]="c.id">{{ c.nome }}</option> }</select></div> }
+            <p class="texto-ajuda">Recorrências nunca são geradas automaticamente. Use a ação “Gerar previstos deste mês”.</p>
+          }
+          @if (erro()) { <p class="erro-formulario" role="alert">{{ erro() }}</p> }
+          <div class="modal__acoes"><button type="button" class="botao botao--secundario" (click)="fecharModal()">Cancelar</button>
+            <button type="submit" class="botao botao--primario">Salvar</button></div>
+        </form>
+      </section>
+    </div>
+  }
+</div>
+
+}

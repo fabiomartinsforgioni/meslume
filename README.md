@@ -1,65 +1,52 @@
-<p align="center">
-  <img src="Fontes/Frontend/public/brand/meslume-logo.png" alt="Meslume" width="480">
-</p>
+<p align="center"><img src="Fontes/Frontend/public/brand/meslume-logo.png" alt="Meslume" width="480"></p>
 
 # Meslume
 
-Organização financeira pessoal para acompanhar entradas, despesas, cartões, parcelas, assinaturas e receitas de agendas presenciais, com visões separadas e consolidadas.
+Organização financeira pessoal, inicialmente local no Windows. O lançamento de gastos é manual e central ao produto. Fluxos de entradas, cartões e faturas, categorias, agendas e recorrências são operados na interface.
 
-## Estado do projeto
+## Execução atual
 
-Preparação inicial. Os arquivos de identidade visual e as regras de desenvolvimento estão disponíveis. A aplicação, o banco, os serviços Windows e o backup automático ainda serão implementados. O desenvolvimento será feito pelo responsável, com orientação do chat.
+- Angular: frontend estático após `npm run build`.
+- Django + Waitress: API em `127.0.0.1:4318`.
+- Caddy: HTTP local em `127.0.0.1:8080`, com encaminhamento de `/api/*` e `/admin/*` ao Waitress.
+- PostgreSQL 17: banco de homologação definido no `backend.env`, fora do repositório.
+- Autenticação: conta local Django, cookie de sessão e CSRF.
+- Persistência inicial: o estado do usuário é validado e salvo em JSONB no PostgreSQL, com versão para impedir sobrescrita concorrente. É uma **ponte de homologação**, não o modelo de dados final normalizado por entidade.
 
-## Tecnologias e direção
+Os cálculos financeiros desta fase ainda são executados no frontend, em **centavos inteiros**, e deverão ser consolidados e recalculados no backend antes de produção externa. Não usar este MVP para movimentações financeiras reais críticas sem validar backup, restauração e regras de negócio.
 
-- Backend Python, com Django e Django REST Framework como proposta inicial.
-- Frontend Angular com TypeScript.
-- Banco PostgreSQL.
-- Interface responsiva para computador e celular.
-- Execução local no Windows, com serviços de início automático e backup programado como requisitos.
+## Desenvolvimento local
 
-## Estrutura
+**Backend** (PowerShell, pasta `Fontes\Backend`): ative `.venv`, instale `requirements.txt`, confira `C:\Meslume\Configuracao\backend.env` e execute `python manage.py check` e `python manage.py migrate`. Para criar conta local, execute `python manage.py createsuperuser` (não publicar credenciais). Para testes da validação: `python manage.py test financeiro.tests`.
 
-```text
-Fontes/
-  Backend/                 backend, testes e migrações, a implementar
-  Frontend/
-    public/
-      brand/               logo e símbolo em PNG transparente
-      favicon.ico          ícone com múltiplas resoluções
-      favicon-32.png       alternativa PNG de 32 pixels
-Infra/
-  Windows/                 scripts de operação, a implementar
-AGENTS.md                  orientações consolidadas
+**Frontend** (PowerShell, pasta `Fontes\Frontend`): `npm ci`, `npm test -- --watch=false` e `npm run build`. Os assets serão gerados em `dist/meslume/browser`.
+
+**Caddy**, exemplo a adaptar ao arquivo de configuração já usado pelo serviço:
+
+```caddyfile
+127.0.0.1:8080 {
+    handle /api/* {
+        reverse_proxy 127.0.0.1:4318
+    }
+    handle /admin/* {
+        reverse_proxy 127.0.0.1:4318
+    }
+    handle {
+        root * C:/Projetos/Meslume/Fontes/Frontend/dist/meslume/browser
+        try_files {path} /index.html
+        file_server
+    }
+}
 ```
 
-As pastas de backend e infraestrutura estão preparadas localmente e aparecerão no Git quando receberem arquivos úteis. O repositório não mantém arquivos artificiais apenas para representar diretórios vazios.
+Não exponha esse endpoint na internet nem na rede local antes de configurar HTTPS, host, autorização e controles adicionais. O acesso atual é exclusivamente local.
 
-## Instalação e execução
+## Armazenamento e operação
 
-Ainda não há aplicação executável nem comandos de instalação validados. Esta seção receberá os procedimentos reais de dependências, configuração, migrações, build, testes, serviços, backup e restauração à medida que forem implementados.
+As informações financeiras **não ficam em localStorage**. O navegador apenas mantém a preferência visual do tema. Ao salvar algo, espere o status `Salvo no PostgreSQL` antes de fechar a aba. Se houver erro, não feche a página e use `Tentar salvar`. Alterações concorrentes entre duas abas são bloqueadas com HTTP 409, sem sobrescrever silenciosamente a outra aba.
 
-As instruções públicas usarão caminhos relativos e configuração por ambiente. Documentação privada, dados financeiros, pacotes, segredos, logs e backups ficam fora do repositório.
+Dados são segregados pelo usuário Django autenticado. Ainda não foi implementada a visão doméstica compartilhada entre usuários. Backups PostgreSQL e uma restauração em banco separado devem ser validados antes de usar dados reais. Dados privados, configurações, logs, pacotes e backups ficam em `C:\Meslume`, fora do Git.
 
-## Identidade visual
+## Segurança e contribuição
 
-A proposta inicial usa azul escuro e verde, com um M e uma lua crescente. Os PNGs têm transparência. O favicon ICO contém tamanhos de 16, 32, 48, 64, 128 e 256 pixels.
-
-Ao preparar o Angular para copiar a pasta `public` para a raiz publicada, a logo poderá ser referenciada como `/brand/meslume-logo.png` e o favicon como `/favicon.ico`. Para publicação em subdiretório, ajustar os caminhos à base da aplicação. A configuração e a integração ainda precisam ser feitas durante o desenvolvimento.
-
-```html
-<!-- Dentro de <head> no index.html, após configurar a publicação dos assets -->
-<link rel="icon" type="image/x-icon" href="favicon.ico">
-```
-
-## Desenvolvimento e segurança
-
-Leia o `AGENTS.md`. Mantenha fontes formatados, dependências justificadas, migrações versionadas e testes das regras financeiras e de autorização. Nunca envie planilhas reais, credenciais ou dumps ao GitHub. Exemplos devem usar somente dados fictícios.
-
-Use branches curtas para mudanças e abra pull requests quando isso ajudar a revisão. A branch padrão é `main`. Contribuições devem explicar a mudança e como ela foi validada. Não inclua dados pessoais em issues.
-
-Um canal privado de relato de vulnerabilidades ainda será definido antes da abertura do serviço ao público. Enquanto isso, não publique detalhes sensíveis em issues.
-
-## Licença
-
-A licença será escolhida explicitamente pelo responsável. A visibilidade pública deste repositório não concede, por si só, uma licença de uso ou redistribuição.
+Leia `AGENTS.md`. Nunca versionar credenciais, banco, arquivos de configuração privados, dumps ou dados financeiros. O sistema não tem integrações bancárias nesta etapa. Código deve ser revisado e testado antes de qualquer alteração no ambiente.
